@@ -31,6 +31,10 @@ if(TRUE){
   library("sceasy")
 }
 
+# 前置参数
+if(TRUE){
+  INPUTFILENAME = ""
+}
 
 BatchKL=function(df, dimensionData=NULL, batch="BatchID", replicates=200, n_neighbors=100, n_cells=100){
   # input:
@@ -107,44 +111,37 @@ if(TRUE){
 
 # 读取数据
 if(TRUE){
-  #scRNAMerged = readRDS(file.path("rds", "0002_tempBdata2.rds"))
-  scRNAMerged = readRDS("0003_scRNAMergedHarmony.rds")
-  scRNAMerged = readRDS(file.path("rds", "0002_tempBdata2.rds"))
-  temp = subset(scRNAMerged, downsample=1000)
+  seuratObject = readRDS(INPUTFILENAME)
 }
 
-# CalLIST
+# main
 if(TRUE){
-  seuratObject = temp
-  result = CalLISI(emb=seuratObject@reductions$umap@cell.embeddings,
-                   meta=seuratObject@meta.data,
-                   col=c('seurat_clusters', 'sample'))
-  print(result)
-}
-
-# BatchKL
-if(TRUE){
-  seuratObject = temp
-  result = BatchKL(df=seuratObject@meta.data,
-                   dimensionData=seuratObject@reductions$umap@cell.embeddings,
-                   batch="sample",
-                   replicates=200,
-                   n_neighbors=100,
-                   n_cells=100)
-  print(result)
-}
-
-# convert seuratObject to annDataObject
-if(TRUE){
-  seuratObject =temp
+  # CalLIST
+  print("compute CalLIST using umap")
+  if(TRUE){
+    result = CalLISI(emb=seuratObject@reductions$umap@cell.embeddings,
+                     meta=seuratObject@meta.data,
+                     col=c('seurat_clusters', 'sample'))
+    print(result)
+    print('\n')
+  }
   
-  adata <- convertFormat(seuratObject, from="seurat", to="anndata", main_layer="counts", drop_single_values=FALSE)
-  print(adata)
-  write_h5ad(adata,paste0(h5ad_out_path,"Merge",".h5ad"))
+  print("compute BatchKL")
+  # BatchKL
+  if(TRUE){
+    result = BatchKL(df=seuratObject@meta.data,
+                     dimensionData=seuratObject@reductions$umap@cell.embeddings,
+                     batch="sample",
+                     replicates=200,
+                     n_neighbors=100,
+                     n_cells=100)
+    print(result)
+    print('\n')
+  }
 }
 
 # debug
-if(TRUE){
+if(FALSE){
   metaData = read.table("temp_scviDeBatchMetaData.tsv", sep='\t')
   metaData[1, 1] = 0
   rownames(metaData) = metaData$V1
