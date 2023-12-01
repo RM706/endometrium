@@ -1,7 +1,7 @@
 .libPaths(c("/home/shumeng/R/x86_64-redhat-linux-gnu-library/4.0/",
             "/home/weiyihu/App/conda/envs/RStudio/lib/R/library"
             #"/home/weiyihu/package/share/4.0"
-            ))
+))
 setwd("/data1/weiyihu/endometrium/data")
 if(FALSE){
   #library("Seurat", lib.loc="/home/weiyihu/package/share/4.0")
@@ -48,7 +48,7 @@ BatchKL=function(df, dimensionData=NULL, batch="BatchID", replicates=200, n_neig
   replicates = replicates
   n_neighbors = n_neighbors
   n_cells = n_cells
-
+  
   set.seed(1)
   if (is.null(dimensionData)){
     umapdata=as.matrix(df[,c("UMAP_1","UMAP_2")])
@@ -76,7 +76,7 @@ BatchKL=function(df, dimensionData=NULL, batch="BatchID", replicates=200, n_neig
 
 CalLISI=function(emb, meta, col=c('seurat_clusters', 'sample')){
   # input:
-  #   emb|\t     matrix|\t      seuratObject@reductions$umap@cell.embeddings
+  #   emb|\t     matrix|\t      seuratObject@reductions@cell.embeddings
   #   meta|\t    data.frame|\t  seuratObject@meta.data
   #   col|\t     vector|\t      =c("seurat_clusters", "sample"),
   #                             [1] should be clusters and [2] should be value associated with batch
@@ -85,7 +85,7 @@ CalLISI=function(emb, meta, col=c('seurat_clusters', 'sample')){
   emb = emb
   meta = meta
   col = col
-
+  
   lisi_index <- lisi::compute_lisi(emb, meta, col)
   
   result = list()
@@ -142,3 +142,35 @@ if(TRUE){
   print(adata)
   write_h5ad(adata,paste0(h5ad_out_path,"Merge",".h5ad"))
 }
+
+# debug
+if(TRUE){
+  metaData = read.table("temp_scviDeBatchMetaData.tsv", sep='\t')
+  metaData[1, 1] = 0
+  rownames(metaData) = metaData$V1
+  metaData = metaData[, -1]
+  colnames(metaData) = metaData[1, ]
+  metaData = metaData[-1, ]
+  
+  reduction = read.table("temp_scviDeBatchReduction.tsv", sep='\t')
+  reduction[1, 1] = -1
+  rownames(reduction) = reduction[, 1]
+  reduction = reduction[, -1]
+  colnames(reduction) = reduction[1, ]
+  reduction = reduction[-1, ]
+  
+  
+  d1 = CalLISI(emb=reduction,
+               meta=metaData,
+               col=c('leiden', 'sample'))
+  
+  d2 = BatchKL(df=metaData,
+               dimensionData=reduction,
+               batch="sample",
+               replicates=200,
+               n_neighbors=100,
+               n_cells=100)
+}
+
+# scvi
+# BatchKL  4.61851667213262
