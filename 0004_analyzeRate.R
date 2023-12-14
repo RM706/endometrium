@@ -224,7 +224,6 @@ if(TRUE){
   # 加载数据
   if(TRUE){
     scRNAMerged = readRDS(inputFileName)  # 未标注细胞类型
-    geneSet = jsonlite::fromJSON("0004_pathwayGeneSet.json")
   }
   # meta.data中添加cellType信息
   #scRNAMerged@meta.data[["cellType"]] = scRNAMerged@active.ident
@@ -248,7 +247,7 @@ if(TRUE){
       dfCellType = df %>% mutate_at(.vars=vars(everything()), list(function(x){x/sum(x)}))
       dfCellType = dfCellType %>% select(order(dfCellType["Stromal", ], decreasing=TRUE))
       #dfCellType = dfCellType %>% select("Ctrl", everything())
-      dfCellType = dfCellType %>% select("Ctrl", "TE", "AS", "EMs","EC", "RPL")
+      dfCellType = dfCellType %>% select("Ctrl", "AS", "EMs","EC", "RPL")
       dfCellType = dfCellType * 100
     }
     # 绘图
@@ -509,6 +508,204 @@ if(TRUE){
     file.remove(c("temp1.pdf", "temp2.pdf", "temp3.pdf", "temp4.pdf",
                   "temp5.pdf"))
   }
+  
+  
+  # 已废弃, 新code存在于0005_f2i.R中
+  # 准备数据, 绘制在不同group中的基因表达热图
+  if(FALSE){
+    # 常规
+    if(FALSE){
+      #dataHeatmapSample = list()
+      groupBy = "groupSub"
+      #dataHeatmapSample[[groupBy]] = list()
+      # 处理免疫细胞
+      if(TRUE){
+        # 提取geneSet中非proliferation的gene
+        geneUsed = c("CCR7", "SELL",
+                     "ACKR3","CCL11","CCL16","CCL27","CCR10","CCR4","CCR5","CCR6","CD6",
+                     "CXCL2","CXCL6","CXCL8","FBLN7","IL1R1","IL22","MADCAM1","MSMP","PF4V1",
+                     "SDC1","STAT1","TFF2","TRAF6","CXCL13", "CCL19"
+                     )
+        #geneUsed = c(geneSet$LymphocyteRecruitment,geneSet$Chemokines,geneSet$Other)
+        names(geneUsed) = NULL
+        geneUsed = unique(geneUsed)
+        geneUsed = geneUsed[geneUsed %in% rownames(scRNAMerged)]
+        # 提取免疫细胞的barcode并按group分组
+        barcodeImmuneList = list()
+        for(group in unique(scRNAMerged@meta.data[[groupBy]])){
+          barcodeSampleList = list()
+          barcode = rownames(scRNAMerged@meta.data)[(scRNAMerged@meta.data[[groupBy]]==group) & (scRNAMerged@meta.data$cellType %in% cellClustersClassified$immune_cells)] 
+          barcodeSample = scRNAMerged@meta.data[barcode, "sample", drop=FALSE]
+          for(sample in unique(barcodeSample[["sample"]])){
+            barcodeSampleList[[sample]] = rownames(barcodeSample)[barcodeSample[["sample"]]==sample]
+          }
+          barcodeImmuneList[[group]] = barcodeSampleList
+        }
+        # 计算在所有免疫细胞中指定基因集的相对表达值
+        barcodeAll = unlist(lapply(barcodeImmuneList, function(group){unlist(group)}))
+        dfData = scRNAMerged@assays$RNA@counts[, barcodeAll]
+        numGroup = 0
+        numGroupLen = length(barcodeImmuneList)
+        expressionList_1 = lapply(barcodeImmuneList, function(group){
+          numGroup <<- numGroup +1
+          numSample = 0
+          numSampleLen = length(group)
+          
+          sampleExpression = lapply(group, function(barcode){
+            numSample <<- numSample +1
+            cat(numGroup, '/', numGroupLen, '\t', numSample, '/', numSampleLen, '\t', '\r')
+            df = dfData[, barcode]
+            expressionTemp = apply(df[geneUsed, ], 1, function(x){sum(x)})
+            expressionTemp = (expressionTemp / sum(df)) *10^6
+          })
+          
+          return(sampleExpression)
+        })
+      }
+      # 处理GC细胞
+      if(TRUE){
+        # 提取geneSet中proliferation的gene
+        #geneUsed = c(geneSet$Proliferation)
+        geneUsed = c("IGF1R", "GNB4", "GNB1", "MAP2K1")
+        names(geneUsed) = NULL
+        geneUsed = unique(geneUsed)
+        geneUsed = geneUsed[geneUsed %in% rownames(scRNAMerged)]
+        # 提取GC细胞的barcode并按group分组
+        barcodeGCList = list()
+        for(group in unique(scRNAMerged@meta.data[[groupBy]])){
+          barcodeSampleList = list()
+          barcode = rownames(scRNAMerged@meta.data)[(scRNAMerged@meta.data[[groupBy]]==group) & (scRNAMerged@meta.data$cellTypeSub %in% c("DZ B cells", "LZ B cells"))] 
+          barcodeSample = scRNAMerged@meta.data[barcode, "sample", drop=FALSE]
+          for(sample in unique(barcodeSample[["sample"]])){
+            barcodeSampleList[[sample]] = rownames(barcodeSample)[barcodeSample[["sample"]]==sample]
+          }
+          barcodeGCList[[group]] = barcodeSampleList
+        }
+        # 计算在所有GC细胞中指定基因集的相对表达值
+        barcodeAll = unlist(lapply(barcodeGCList, function(group){unlist(group)}))
+        dfData = scRNAMerged@assays$RNA@counts[, barcodeAll]
+        numGroup = 0
+        numGroupLen = length(barcodeGCList)
+        expressionList_2 = lapply(barcodeGCList, function(group){
+          numGroup <<- numGroup +1
+          numSample = 0
+          numSampleLen = length(group)
+          
+          sampleExpression = lapply(group, function(barcode){
+            numSample <<- numSample +1
+            cat(numGroup, '/', numGroupLen, '\t', numSample, '/', numSampleLen, '\t', '\r')
+            df = dfData[, barcode, drop=FALSE]
+            expressionTemp = apply(df[geneUsed, , drop=FALSE], 1, function(x){sum(x)})
+            expressionTemp = (expressionTemp / sum(df)) *10^6
+          })
+          
+          return(sampleExpression)
+        })
+      }
+      # 合并免疫细胞与GC细胞的基因表达
+      if(TRUE){
+        dfList1 = lapply(expressionList_1, function(group){
+          df = data.frame(row.names=names(group[[1]]))
+          for(sample in names(group)){
+            df[[sample]] = group[[sample]]
+          }
+          return(df)
+        })
+        dfList2 = lapply(expressionList_2, function(group){
+          if(length(group)==0){return(data.frame())}
+          df = data.frame(row.names=names(group[[1]]))
+          for(sample in names(group)){
+            df[[sample]] = group[[sample]]
+          }
+          return(df)
+        })
+        #dataHeatmapSample[[groupBy]][["immune"]] = dfList1
+        #dataHeatmapSample[[groupBy]][["GC"]] = dfList2
+        
+        # 合并dfList1/dfList2
+        dfList1 = lapply(dfList1, function(df){
+          df = as.data.frame(t(df))
+          df[, "sample"] = rownames(df)
+          return(df)
+        })
+        dfList2 = lapply(dfList2, function(df){
+          df = as.data.frame(t(df))
+          df[, "sample"] = rownames(df)
+          return(df)
+        })
+        dfList = list()
+        for(group in names(dfList1)){
+          df1 = dfList1[[group]]
+          df2 = dfList2[[group]]
+          df = dplyr::full_join(df1, df2, by="sample")
+          df[is.na(df)] = 0
+          rownames(df) = df[["sample"]]
+          df = df[, -which(colnames(df)=="sample")]
+          df = t(df)
+          dfList[[group]] = df
+        }
+        geneUsed = lapply(dfList, function(df){rownames(df)}) %>% unlist() %>% unique()
+        dfList = lapply(dfList, function(df){
+          gene = setdiff(geneUsed, rownames(df))
+          df = as.data.frame(t(df))
+          df[gene] = 0
+          df = as.data.frame(t(df))
+        })
+      }
+      #dataHeatmapSample[[groupBy]][["raw"]] = dfList 
+      # 整理格式
+      if(TRUE){
+        dfList = dfList[-which(names(dfList) %in% c("RPL", "TE"))]
+        df = data.frame(row.names=rownames(dfList[[1]]))
+        for(dfGroup in dfList){
+          df = cbind(df, dfGroup)
+        }
+        
+        geneDel = apply(df, 1, function(c){sum(ifelse(c==0,1,0)) == length(c)})  # 去掉在所有group中表达为0的gene
+        geneDel = names(geneDel)[geneDel]  # 去掉在所有group中表达为0的gene
+        df = df[!rownames(df) %in% geneDel, ]
+      }
+      # 根据gene在Ctrl中的表达对gene进行筛选
+      if(TRUE){
+        #ctrl = ifelse(groupBy=="group", list(c("Ctrl")), list(c("Ctrl(Endometrium)", "Ctrl(Decidual)")))[[1]]
+        ctrl = ifelse(groupBy=="group", list(c("Ctrl")), list(c("Ctrl(Endometrium)")))[[1]]
+        cutoffValue = NULL
+        
+        # 对gene在每个group的所有sample中取均值
+        dfDebug = data.frame(row.names=rownames(df))
+        for(group in names(sampleInGroup[[groupBy]])){
+          sample = sampleInGroup[[groupBy]][[group]]
+          sample = sample[sample %in% colnames(df)]
+          dfDebug[group] = apply(df[, sample], 1, function(x){mean(x)})
+        }
+        dfDebug = dfDebug[, colSums(is.na(dfDebug)) < nrow(dfDebug)]  # 删除全部为NA的列
+        
+        dfDebug[["sum"]] = apply(dfDebug, 1, function(x){sum(x)})
+        dfDebug = apply(dfDebug, 2, function(x){x/dfDebug$sum})
+        dfDebug = dfDebug[, -which(colnames(dfDebug)=="sum")]
+        dfDebug = as.data.frame(dfDebug)
+        dfDebug[, "orderCtrl"] = 1
+        col = colnames(dfDebug)[-which(colnames(dfDebug) %in% c(ctrl, "orderCtrl"))]
+        ctrl = apply(dfDebug[, ctrl, drop=FALSE], 1, function(x){mean(x)})
+        for(i in col){
+          score = ifelse(ctrl <= dfDebug[i], 0, 1)
+          dfDebug[, "orderCtrl"] = dfDebug[, "orderCtrl"] + score
+        }
+        
+        cutoffValue = ifelse(is.null(cutoffValue), floor(dim(dfDebug)[2]/2), cutoffValue)
+        dfDebug = dfDebug[dfDebug[["orderCtrl"]]<=cutoffValue, ]
+        
+        df = df[rownames(df)[rownames(df) %in% rownames(dfDebug)], ]
+        ref <- unlist(geneSetDebug)
+        val <- rownames(dfDebug)
+        val_sorted <- val[order(match(val, ref))]
+        df = df[val_sorted, ]
+      }
+    }
+    # 读取已保存数据
+    if(FALSE){
+      dataHeatmapSample = readRDS("0004_dataHeatmapSample.rds")
+    }
 }
 
 #########################
@@ -922,8 +1119,8 @@ if(TRUE){
   metaNew = metaNew[, -which(colnames(metaNew)=="barcode")]
 }
 
-# 绘制F2h
 if(TRUE){
+  # 绘制F2h
   # 数据处理
   if(TRUE){
     geneSetRef = lapply(geneSetRef, function(geneSet){geneSet[geneSet %in% rownames(scRNAMerged)]})
@@ -1010,215 +1207,20 @@ if(TRUE){
   }
 }
 
-# 绘制F2I基因集表达
-if(TRUE){
-  df = scRNAMerged@meta.data
-  
-  barcodeList = list()
-  for(g in unique(df[["group"]])){
-    barcodeList[[g]] = rownames(df)[df[["group"]]==g]
-  }
-  
-}
+
 
 # test
 if(FALSE){
-  barcodeList = list()
-  for(group in unique(scRNAMerged@meta.data$group)){
-    barcodeList[[group]] = rownames(scRNAMerged@meta.data)[scRNAMerged@meta.data$group==group] 
-  }
-  geneExpression = FindAllMarkers(scRNAMerged, only.pos=TRUE, min.pct=0, logfc.threshold=0)
-}
-
-if(FALSE){
-  groupBy = "group"
-  # 处理免疫细胞
-  if(TRUE){
-    # 提取geneSet中非proliferation的gene
-    geneUsed = c(geneSet$LymphocyteRecruitment,
-                 geneSet$Chemokines,
-                 geneSet$Adhesion,
-                 geneSet$Inflammatory,
-                 geneSet$Other)
-    names(geneUsed) = NULL
-    geneUsed = unique(geneUsed)
-    geneUsed = geneUsed[geneUsed %in% rownames(scRNAMerged)]
-    # 提取免疫细胞的barcode并按group分组
-    barcodeImmuneList = list()
-    for(group in unique(scRNAMerged@meta.data[[groupBy]])){
-      barcodeImmuneList[[group]] = rownames(scRNAMerged@meta.data)[(scRNAMerged@meta.data[[groupBy]]==group) & (scRNAMerged@meta.data$cellType %in% cellClustersClassified$immune_cells)] 
-    }
-    # 计算在所有免疫细胞中指定基因集的相对表达值
-    dfData = scRNAMerged@assays$RNA@counts[, unlist(barcodeImmuneList)]
-    numGroup = 0
-    numGroupLen = length(barcodeImmuneList)
-    expressionList_1 = lapply(barcodeImmuneList, function(barcode){
-      numGroup <<- numGroup +1
-      df = dfData[, barcode]
-      expressionTemp = list()
-      for(gene in geneUsed){
-        expressionTemp[[gene]] = gene
-      }
-      numGene = 0
-      numGeneLen = length(expressionTemp)
-      expressionTemp = lapply(expressionTemp, function(gene){
-        numGene <<- numGene +1
-        cat(numGroup, '/', numGroupLen, '\t', numGene, '/', numGeneLen, '\r')
-        sum(df[gene, ]) / sum(df)
-      })
-      return(expressionTemp)
-    })
-  }
-  # 处理GC细胞
-  if(TRUE){
-    # 提取geneSet中proliferation的gene
-    geneUsed = c(geneSet$Proliferation)
-    names(geneUsed) = NULL
-    geneUsed = unique(geneUsed)
-    geneUsed = geneUsed[geneUsed %in% rownames(scRNAMerged)]
-    # 提取GC细胞的barcode并按group分组
-    barcodeGCList = list()
-    for(group in unique(scRNAMerged@meta.data[[groupBy]])){
-      barcodeGCList[[group]] = rownames(scRNAMerged@meta.data)[(scRNAMerged@meta.data[[groupBy]]==group) & (scRNAMerged@meta.data$cellTypeSub %in% c("DZ B cells", "LZ B cells"))] 
-    }
-    # 计算在所有GC细胞中指定基因集的相对表达值
-    dfData = scRNAMerged@assays$RNA@counts[, unlist(barcodeGCList)]
-    numGroup = 0
-    numGroupLen = length(barcodeImmuneList)
-    expressionList_2 = lapply(barcodeGCList, function(barcode){
-      numGroup <<- numGroup +1
-      df = dfData[, barcode]
-      expressionTemp = list()
-      for(gene in geneUsed){
-        expressionTemp[[gene]] = gene
-      }
-      numGene = 0
-      numGeneLen = length(expressionTemp)
-      expressionTemp = lapply(expressionTemp, function(gene){
-        numGene <<- numGene +1
-        cat(numGroup, '/', numGroupLen, '\t', numGene, '/', numGeneLen, '\r')
-        sum(df[gene, ]) / sum(df)
-      })
-      return(expressionTemp)
-    })
-  }
-  # 合并免疫细胞与GC细胞的基因表达
-  if(TRUE){
-    expressionList = list()
-    for(group in names(expressionList_1)){
-      expressionList[[group]] = c(expressionList_1[[group]], expressionList_2[[group]])
-    }
-  }
+  debug <- data.frame(A = c(1, 2, 3),
+                     B = c(5, 10, 15))
   
-  
-  dfTemp2 = lapply(expressionList, function(group){unlist(group)})
-  dfTemp = data.frame(row.names=names(dfTemp2[[1]]))
-  for(i in names(dfTemp2)){
-    dfTemp[i] = dfTemp2[[i]]
-  }
-  dfTemp = dfTemp * 10000
-  
-  
-  df = dfTemp
-  df = df[, levels(groupLevels[[groupBy]])]
-  df = df[, -which(colnames(df)=="TE")]
-  df[is.na(df)] = 0  # !!!!!
-  
-  # 根据gene在Ctrl中的表达对gene进行筛选
-  if(TRUE){
-    #ctrl = ifelse(groupBy=="group", list(c("Ctrl")), list(c("Ctrl(Endometrium)", "Ctrl(Decidual)")))[[1]]
-    ctrl = ifelse(groupBy=="group", list(c("Ctrl")), list(c("Ctrl(Decidual)")))[[1]]
-    cutoffValue = NULL
-    
-    dfDebug = df
-    dfDebug[["sum"]] = apply(dfDebug, 1, function(x){sum(x)})
-    dfDebug = apply(dfDebug, 2, function(x){x/dfDebug$sum})
-    dfDebug = dfDebug[, -which(colnames(dfDebug)=="sum")]
-    dfDebug = as.data.frame(dfDebug)
-    dfDebug[, "orderCtrl"] = 1
-    col = colnames(dfDebug)[-which(colnames(dfDebug) %in% c(ctrl, "orderCtrl"))]
-    ctrl = apply(dfDebug[, ctrl, drop=FALSE], 1, function(x){mean(x)})
-    for(i in col){
-      score = ifelse(ctrl <= dfDebug[i], 0, 1)
-      dfDebug[, "orderCtrl"] = dfDebug[, "orderCtrl"] + score
-    }
-    
-    cutoffValue = ifelse(is.null(cutoffValue), floor(dim(dfDebug)[2]/2), cutoffValue)
-    dfDebug = dfDebug[dfDebug[["orderCtrl"]]<=cutoffValue, ]
-    
-    df = df[rownames(df)[rownames(df) %in% rownames(dfDebug)], ]
-    ref <- unlist(geneSetDebug)
-    val <- rownames(dfDebug)
-    val_sorted <- val[order(match(val, ref))]
-    df = df[val_sorted, ]
-  }
-  
-  
-  #plot = makeHeatmap(df=df, groupColor=unlist(groupColors))
-  plot = pheatmap::pheatmap(df, scale="row", cluster_rows=TRUE, cluster_cols=FALSE)
-  pdf("0004_geneGroupSubHeatmapAlternative.pdf", width=10, height=15)
-  print(plot)
-  dev.off()
-  
-  DimPlot(scRNAMerged, group.by="cellType", cols=getCellTypeColor(cellType=scRNAMerged@meta.data$cellType,
-                                                                    colorList=c(cellTypeColors$base,
-                                                                                cellTypeColors$subNK)))
-  FeaturePlot(scRNAMerged, features=c("CCL2", "CCL3", "CCL4", "CCL5", "CCL8", "CCL18", "CCL19",
-                                      "CCL21", "CXCL9", "CXCL10", "CXCL11", "CXCL13"))
-  
-  
-  
+  scaled_data <- scale(debug, center=FALSE, scale=FALSE)
   
 }
 
-if(FALSE){
-  # 在group中，将Ctrl拆分为Ctrl(Endometrium)及Ctrl(Decidual), 并以Ctrl(Decidual)作为对照组
-  expressionList_1 = expressionGroupImmune
-  expressionList_1 = expressionList_1[-1]
-  expressionList_1[["Ctrl(Endometrium)"]] = expressionGroupSubImmune$`Ctrl(Endometrium)`
-  expressionList_1[["Ctrl(Decidual)"]] = expressionGroupSubImmune$`Ctrl(Decidual)`
-  expressionList_2 = expressionGroupGC
-  expressionList_2 = expressionList_2[-1]
-  expressionList_2[["Ctrl(Endometrium)"]] = expressionGroupSubGC$`Ctrl(Endometrium)`
-  expressionList_2[["Ctrl(Decidual)"]] = expressionGroupSubGC$`Ctrl(Decidual)`
-  expressionList = list()
-  for(group in names(debug1)){
-    expressionList[[group]] = c(expressionList_1[[group]], expressionList_2[[group]])
-  }
-  dfTemp2 = lapply(expressionList, function(group){unlist(group)})
-  dfTemp = data.frame(row.names=names(dfTemp2[[1]]))
-  for(i in names(dfTemp2)){
-    dfTemp[i] = dfTemp2[[i]]
-  }
-  dfTemp = dfTemp * 10000
-  df = dfTemp
-  df = df[, c("Ctrl(Endometrium)","Ctrl(Decidual)", "TE", "AS", "EMs", "EC", "RPL")]
-  df = df[, -which(colnames(df)=="TE")]
-  df[is.na(df)] = 0
-  if(TRUE){
-    ctrl = c("Ctrl(Decidual)")
-    cutoffValue = NULL
-    
-    dfDebug = df
-    dfDebug[["sum"]] = apply(dfDebug, 1, function(x){sum(x)})
-    dfDebug = apply(dfDebug, 2, function(x){x/dfDebug$sum})
-    dfDebug = dfDebug[, -which(colnames(dfDebug)=="sum")]
-    dfDebug = as.data.frame(dfDebug)
-    dfDebug[, "orderCtrl"] = 1
-    col = colnames(dfDebug)[-which(colnames(dfDebug) %in% c(ctrl, "orderCtrl"))]
-    ctrl = apply(dfDebug[, ctrl, drop=FALSE], 1, function(x){mean(x)})
-    for(i in col){
-      score = ifelse(ctrl <= dfDebug[i], 0, 1)
-      dfDebug[, "orderCtrl"] = dfDebug[, "orderCtrl"] + score
-    }
-    
-    cutoffValue = ifelse(is.null(cutoffValue), floor(dim(dfDebug)[2]/2), cutoffValue)
-    dfDebug = dfDebug[dfDebug[["orderCtrl"]]<=cutoffValue, ]
-    
-    df = df[rownames(df)[rownames(df) %in% rownames(dfDebug)], ]
-    ref <- unlist(geneSetDebug)
-    val <- rownames(dfDebug)
-    val_sorted <- val[order(match(val, ref))]
-    df = df[val_sorted, ]
-  }
-}
+
+
+
+
+
+
